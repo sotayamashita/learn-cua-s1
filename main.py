@@ -1,6 +1,7 @@
 """Score candidate actions with Cua-S1 without interacting with the screen."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -11,58 +12,12 @@ import torch
 import transformers
 from cua_s1.four_b import FourBModel, Option, OptionProbability
 from huggingface_hub import snapshot_download
-from peft import PeftModel
-from transformers import (
-    AutoModelForCausalLM,
-    AutoModelForImageTextToText,
-    AutoProcessor,
-    AutoTokenizer,
-)
 
-
-class CuaModel(FourBModel):
-    """Use the Transformers dtype argument with Cua's inference implementation."""
-
-    def load(self) -> None:
-        """Load the base model and optional LoRA adapter for inference.
-
-        Called automatically on the first forward call. Uses the configured
-        modality, device, and dtype, and downloads uncached model files.
-        Stores the tokenizer, image processor when needed, and model in
-        evaluation mode on this instance.
-
-        Overrides the pinned dependency's loader to replace its deprecated
-        torch_dtype argument with dtype.
-        """
-        self._tokenizer = AutoTokenizer.from_pretrained(self.base_model)
-
-        if self.modality == "multimodal":
-            self._processor = AutoProcessor.from_pretrained(self.base_model)
-            model_cls = AutoModelForImageTextToText
-        else:
-            self._processor = None
-            model_cls = AutoModelForCausalLM
-
-        model = model_cls.from_pretrained(
-            self.base_model, dtype=getattr(torch, self.dtype), device_map=self.device
-        )
-
-        if self.lora_adapter_path:
-            model = PeftModel.from_pretrained(model, str(self._resolve_adapter_path()))
-
-        self._model = model.eval()
+transformers.utils.logging.set_verbosity_error()
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments and validate the screenshot path.
-
-    Returns:
-        Arguments containing the device, check flag, and optional screenshot Path.
-
-    Raises:
-        SystemExit: On a help request, invalid arguments, or a screenshot path
-            that does not point to a file.
-    """
+    """Parse CLI options and reject missing screenshot files."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check",
@@ -88,19 +43,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def check_environment(device: str) -> str:
-    """Check the selected device without downloading model weights.
+    """Verify device computation and return its supported inference dtype.
 
-    Args:
-        device: "cpu", "mps", or "cuda".
-
-    Returns:
-        The verified dtype name: float32 for CPU and bfloat16 for GPU.
-        CUDA devices without bfloat16 support use float32.
-
-    Raises:
-        ImportError: If the required Qwen model classes cannot be imported.
-        SystemExit: If the device is unavailable or the computation is incorrect.
-        RuntimeError: If the selected device cannot run the computation.
+    Uses float32 for CPU and CUDA without bfloat16 support; otherwise bfloat16.
+    Exits if the selected device is unavailable or returns incorrect results.
     """
     from transformers import (  # noqa: F401
         Qwen3_5ForCausalLM,
@@ -127,17 +73,11 @@ def check_environment(device: str) -> str:
     return dtype
 
 
-def create_model(modality: str, device: str, dtype: str) -> CuaModel:
-    """Download the selected adapter and configure the model for inference.
+def create_model(modality: str, device: str, dtype: str) -> FourBModel:
+    """Download the text or multimodal adapter and configure lazy model loading.
 
-    Args:
-        modality: "text" for screen text or "multimodal" for screenshots.
-        device: "cpu", "mps", or "cuda".
-        dtype: Dtype name returned by check_environment.
-
-    Returns:
-        A Cua model configured for the selected device with a local adapter path.
-        Base model weights load on the first forward call.
+    Pass a device and dtype validated by check_environment(). The base weights
+    load on the first forward call, or explicitly through model.load().
     """
     print(
         f"Loading model ({modality}). Weights will be downloaded on the first run.",
@@ -149,7 +89,7 @@ def create_model(modality: str, device: str, dtype: str) -> CuaModel:
         allow_patterns=[f"{modality}/*"],
     )
 
-    return CuaModel(
+    return FourBModel(
         base_model="Qwen/Qwen3.5-4B",
         lora_adapter_path=Path(adapter_root) / modality,
         modality=modality,
@@ -158,51 +98,31 @@ def create_model(modality: str, device: str, dtype: str) -> CuaModel:
     )
 
 
-def score_actions(model: CuaModel, screenshot: Path | None) -> list[OptionProbability]:
-    """Score the candidate actions in a fixed login example.
-
-    The sample goal is to submit a completed login form. The candidates are
-    clicks on "Login" and "Login with Google"; no actions are executed.
+def score_actions(
+    model: FourBModel, sample: dict, screenshot: Path | None = None
+) -> list[OptionProbability]:
+    """Score the supplied GUI candidates without executing actions.
 
     Args:
         model: Cua model configured for multimodal input when a screenshot is
             supplied, or text input otherwise. Weights load on first inference.
-        screenshot: Path to a completed login form image, or None to use the
-            built-in text describing filled fields and the two buttons.
+        sample: Model inputs with app, task_family, goal, ax_tree, and options.
+            Each option is a dictionary accepted by Option.
+        screenshot: Image replacing the sample's screen text, or None for text.
 
     Returns:
         Candidate actions with their predicted probabilities, without sorting.
     """
-    return model.forward(
-        options=[
-            Option(element_id="login", role="button", label="Login", action="click"),
-            Option(
-                element_id="login-google",
-                role="button",
-                label="Login with Google",
-                action="click",
-            ),
-        ],
-        app="Browser",
-        task_family="login",
-        goal="Submit the completed login form.",
-        ax_tree=(
-            "Login form\nEmail: filled\nPassword: filled\n"
-            "Button: Login\nButton: Login with Google"
-            if screenshot is None
-            else None
-        ),
-        screenshot=screenshot,
-    )
+    inputs = {
+        **sample,
+        "options": [Option(**option) for option in sample["options"]],
+        "ax_tree": None if screenshot is not None else sample["ax_tree"],
+    }
+    return model.forward(**inputs, screenshot=screenshot)
 
 
 def main() -> None:
-    """Run environment checks or score the sample login actions from the CLI.
-
-    With --check, exits after checking the environment without downloading
-    weights. Otherwise, selects the input modality and prints candidate
-    probabilities in descending order. Does not execute GUI actions.
-    """
+    """Check the device or score the login sample without executing GUI actions."""
     args = parse_args()
     dtype = check_environment(args.device)
     if args.check:
@@ -211,7 +131,9 @@ def main() -> None:
 
     modality = "multimodal" if args.screenshot else "text"
     model = create_model(modality, args.device, dtype)
-    results = score_actions(model, args.screenshot)
+    sample_path = Path(__file__).parent / "tasks/login/environment/app/login.json"
+    sample = json.loads(sample_path.read_text())
+    results = score_actions(model, sample, args.screenshot)
     for result in sorted(results, key=lambda item: item.probability, reverse=True):
         print(f"{result.label}: {result.action} {result.probability:.3f}")
 

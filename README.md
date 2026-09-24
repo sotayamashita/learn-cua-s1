@@ -40,6 +40,25 @@ The sample scores `Login` and `Login with Google` for the goal of submitting a c
 
 ---
 
+## Compare Jev and Cua-S1 with Harbor
+
+Compare both models on the text-only [login sample](tasks/login/environment/app/login.json), loaded from the task container. Cua-S1 runs locally; Jev uses the TypeSafe API. Harbor grades the selected action in Docker.
+
+```sh
+mise exec -- just eval                       # Run both models
+mise exec -- uv run --group eval harbor view jobs  # Open the results viewer
+```
+
+Check grading without model calls using the reference solution. Expected reward: `1.0`.
+
+```sh
+mise exec -- uv run --group eval harbor run -p tasks/login -a oracle -n 1
+```
+
+[eval.yaml](eval.yaml) selects the models and loads `agents.login:LoginAgent`. Results include correctness, candidate probabilities, and timing, saved under `jobs/`. Model loading is timed separately from inference. This single sample does not establish general model performance. `.env` and `jobs/` are excluded from Git.
+
+---
+
 ## Development
 
 Lint and check formatting:
@@ -125,7 +144,7 @@ flowchart LR
 ```
 
 ```text
-CuaModel.load()
+FourBModel.load()
 ├─ Base model loading
 │  └─ Original Qwen3.5-4B weights W
 │

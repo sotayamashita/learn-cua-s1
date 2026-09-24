@@ -1,0 +1,11 @@
+n_concurrent_trials: 1
+tasks:
+  - path: tasks/login
+agents:
+  - import_path: agents.login:LoginAgent
+    model_name: cua-ai/cua-s1-4b-0.2
+    override_setup_timeout_sec: 1800
+    kwargs:
+      device: mps
+  - import_path: agents.login:LoginAgent
+    model_name: jev-latest

@@ -1,0 +1,10 @@
+{
+  "app": "Browser",
+  "task_family": "login",
+  "goal": "Submit the completed login form.",
+  "ax_tree": "Login form\nEmail: filled\nPassword: filled\nButton: Login\nButton: Login with Google",
+  "options": [
+    {"element_id": "login", "role": "button", "label": "Login", "action": "click"},
+    {"element_id": "login-google", "role": "button", "label": "Login with Google", "action": "click"}
+  ]
+}

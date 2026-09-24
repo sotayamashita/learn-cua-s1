@@ -1,0 +1,13 @@
+schema_version = "1.4"
+
+[metadata]
+description = "Single text-only login action-selection sample from main.py"
+
+[agent]
+timeout_sec = 300.0
+
+[verifier]
+timeout_sec = 30.0
+
+[environment]
+build_timeout_sec = 300.0

@@ -28,3 +28,7 @@ format:
 # Run inference with optional command-line arguments.
 run *args:
     mise exec -- uv run main.py "$@"
+
+# Compare the login sample with Harbor; reads TYPESAFE_API_KEY from .env.
+eval *args:
+    PYTHONPATH=. mise exec -- uv run --locked --group eval --env-file .env harbor run -c eval.yaml "$@"

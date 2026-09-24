@@ -20,6 +20,10 @@ cua-s1 = { url = "https://github.com/trycua/cua/archive/6762bcf63b616c6de86ab7b2
 dev = [
     "ruff>=0.16.8",
 ]
+eval = [
+    "harbor>=0.23.0,<0.24",
+    "typesafe-sdk>=0.7.1,<0.8",
+]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
