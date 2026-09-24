@@ -163,3 +163,75 @@ Selected results from [Cua's benchmark](https://github.com/trycua/cua/tree/main/
 | Search and filtering | 2.1% | 95.8% |
 
 These are Cua's published results, not local measurements; the table does not specify the Jev version. They do not establish screenshot performance or superiority over current Jev. Local accuracy, speed, and the benefit of image input remain unverified.
+
+### Training cost estimate
+
+Cua publishes training code, but the sources reviewed do not report actual training costs. Estimate each adapter separately:
+
+```text
+SFT cost = runs × GPU hourly price × (examples × epochs × seconds per example / 3,600 + overhead hours)
+```
+
+| Variable | Meaning |
+| --- | --- |
+| Examples | Usable labeled training examples |
+| Epochs | Passes over the training data; default of 4 in Cua's script |
+| Seconds per example | Measured training time, including preprocessing and gradient updates |
+| GPU hourly price | Hourly price of the GPU instance used for the measurement |
+| Overhead hours | GPU time for setup, validation, and checkpoint saving |
+| Runs | Experiments with different settings or seeds |
+
+Example: 100,000 examples × 4 epochs × 2 seconds per example ≈ 222 GPU hours, or **$953 at $4.29/hour**, before overhead and taxes. The processing speed is hypothetical, not a Cua measurement. The hourly price is Lambda's single-H100-SXM rate checked on September 24, 2026.
+
+Total project cost also includes data preparation, evaluation, and optional RL. RL requires an interactive GUI environment and success checks; saved logs alone are insufficient.
+
+Sources: [Cua SFT code](https://github.com/trycua/cua/blob/6762bcf63b616c6de86ab7b2309686150913105b/libs/cua-s1/training/train_4b_v2.py), [Cua RL code](https://github.com/trycua/cua/blob/6762bcf63b616c6de86ab7b2309686150913105b/libs/cua-s1/training/train_4b_rl.py), [Lambda pricing](https://lambda.ai/pricing).
+
+### AWS inference deployment
+
+Proposed deployment in Tokyo, `ap-northeast-1`, using LoRA merging, batching, and autoscaling to reduce cost. Target latency: a few seconds. Performance and savings are untested.
+
+```mermaid
+architecture-beta
+    group aws(cloud)[AWS Tokyo]
+    group inference(cloud)[SageMaker real time inference] in aws
+
+    service client(server)[Web server] in aws
+    service api(server)[Endpoint] in inference
+    service model(server)[Batched GPU inference] in inference
+    service weights(disk)[S3 LoRA merged model] in aws
+    service scaling(server)[CloudWatch and Auto Scaling] in aws
+
+    client:R <--> L:api
+    api:R <--> L:model
+    weights:T --> B:model
+    scaling:L --> R:model
+```
+
+Replicas keep the merged Qwen3.5-4B model loaded to avoid startup delays. Load tests determine batch size and capacity.
+
+| Scaling setting | Initial assumption |
+| --- | --- |
+| Capacity | 2–4 warm replicas, pending load tests and quota checks |
+| Scale out | Per-instance concurrency calibrated against p95 latency |
+| Scale in | Low demand, cooldown, and completion of in-flight requests |
+| Burst handling | Spare capacity, bounded concurrency, and rate limits |
+| Readiness | Model loading and warm-up before traffic |
+
+GPU hosting at $1.7723 per `ml.g6.2xlarge` instance-hour, before savings. Tokyo On-Demand pricing as of September 24, 2026, in USD before tax:
+
+| Monthly capacity | Instance-hours | GPU hosting cost |
+| --- | ---: | ---: |
+| 1 warm replica, cost comparison only | 730 | $1,293.78 |
+| 2 warm replicas | 1,460 | $2,587.56 |
+| 2 warm replicas plus 2 extra replicas for 40 hours each | 1,540 | $2,729.34 |
+
+Cost = hourly rate × billed instance-hours, including loading and idle time. Estimates exclude web hosting, load balancing, storage, networking, logs, and development.
+
+Instance sizing is provisional. Faster inference reduces hosting costs only if it allows smaller instances or fewer billed instance-hours. Consider Savings Plans once baseline usage is stable. See [AWS inference cost optimization](https://docs.aws.amazon.com/sagemaker/latest/dg/inference-cost-optimization.html).
+
+CPU inference needs latency and accuracy benchmarks. Async scale-to-zero requires tolerating startup delays.
+
+Sources: [SageMaker autoscaling](https://docs.aws.amazon.com/sagemaker/latest/dg/endpoint-auto-scaling.html), [Scale-to-zero startup behavior](https://docs.aws.amazon.com/sagemaker/latest/dg/endpoint-auto-scaling-zero-instances.html), [Asynchronous autoscaling](https://docs.aws.amazon.com/sagemaker/latest/dg/async-inference-autoscale.html), [AWS Tokyo SageMaker prices](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonSageMaker/current/ap-northeast-1/index.csv).
+
+Optimization references: [LoRA merging](https://huggingface.co/docs/peft/main/package_reference/lora#merge-lora-weights-into-the-base-model), [Dynamic batching](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/batcher.html).
