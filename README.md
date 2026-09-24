@@ -192,7 +192,7 @@ Selected results from [Cua's benchmark](https://github.com/trycua/cua/tree/main/
 
 These are Cua's published results, not local measurements; the table does not specify the Jev version. They do not establish screenshot performance or superiority over current Jev. Local accuracy, speed, and the benefit of image input remain unverified.
 
-### Training cost estimate
+### Training cost estimate (confidence: low)
 
 Cua publishes training code, but the sources reviewed do not report actual training costs. Estimate each adapter separately:
 
@@ -217,7 +217,7 @@ Total project cost also includes data preparation, evaluation, and optional RL. 
 
 Sources: [Cua SFT code](https://github.com/trycua/cua/blob/6762bcf63b616c6de86ab7b2309686150913105b/libs/cua-s1/training/train_4b_v2.py), [Cua RL code](https://github.com/trycua/cua/blob/6762bcf63b616c6de86ab7b2309686150913105b/libs/cua-s1/training/train_4b_rl.py), [Lambda pricing](https://lambda.ai/pricing).
 
-### AWS inference deployment
+### AWS inference deployment (confidence: low)
 
 Proposed deployment in Tokyo, `ap-northeast-1`, using LoRA merging, batching, and autoscaling to reduce cost. Target latency: a few seconds. Performance and savings are untested.
 
