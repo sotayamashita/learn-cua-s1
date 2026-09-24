@@ -57,7 +57,7 @@ def parse_args() -> argparse.Namespace:
     """Parse command-line arguments and validate the screenshot path.
 
     Returns:
-        Arguments containing the check flag and an optional screenshot Path.
+        Arguments containing the device, check flag, and optional screenshot Path.
 
     Raises:
         SystemExit: On a help request, invalid arguments, or a screenshot path
@@ -67,12 +67,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Check dependencies and MPS without downloading model weights",
+        help="Check dependencies and the selected device without downloading weights",
     )
     parser.add_argument(
         "--screenshot",
         type=Path,
         help="Login screen image; use the text example if omitted",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["cpu", "mps", "cuda"],
+        default="mps",
+        help="Inference device: CPU, Apple GPU, or NVIDIA GPU (default: mps)",
     )
     args = parser.parse_args()
     if args.screenshot is not None and not args.screenshot.is_file():
@@ -81,15 +87,20 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def check_environment() -> None:
-    """Check Qwen model imports and MPS support without downloading weights.
+def check_environment(device: str) -> str:
+    """Check the selected device without downloading model weights.
 
-    Prints library versions and verifies a small bfloat16 computation on MPS.
+    Args:
+        device: "cpu", "mps", or "cuda".
+
+    Returns:
+        The verified dtype name: float32 for CPU and bfloat16 for GPU.
+        CUDA devices without bfloat16 support use float32.
 
     Raises:
         ImportError: If the required Qwen model classes cannot be imported.
-        SystemExit: If MPS is unavailable or the computation result is incorrect.
-        RuntimeError: If the MPS computation cannot run.
+        SystemExit: If the device is unavailable or the computation is incorrect.
+        RuntimeError: If the selected device cannot run the computation.
     """
     from transformers import (  # noqa: F401
         Qwen3_5ForCausalLM,
@@ -98,27 +109,34 @@ def check_environment() -> None:
 
     print(f"PyTorch: {torch.__version__}")
     print(f"Transformers: {transformers.__version__}")
-    if not torch.backends.mps.is_available():
-        raise SystemExit(
-            "MPS is unavailable. Apple Silicon builds of Python and PyTorch are required."
-        )
+    if device == "mps" and not torch.backends.mps.is_available():
+        raise SystemExit("MPS is unavailable. Use --device cpu instead.")
+    if device == "cuda" and not torch.cuda.is_available():
+        raise SystemExit("CUDA is unavailable. Use --device cpu instead.")
 
-    # Verify GPU operations with the example's dtype, beyond the availability flag.
-    probe = torch.ones(2, device="mps", dtype=torch.bfloat16)
+    dtype = "bfloat16"
+    if device == "cpu" or (device == "cuda" and not torch.cuda.is_bf16_supported()):
+        dtype = "float32"
+
+    # Verify operations with the inference dtype, beyond the availability flag.
+    probe = torch.ones(2, device=device, dtype=getattr(torch, dtype))
     if (probe + probe).sum().item() != 4:
-        raise SystemExit("MPS computation check failed.")
+        raise SystemExit(f"{device} computation check failed.")
 
-    print("MPS / bfloat16: OK")
+    print(f"{device} / {dtype}: OK")
+    return dtype
 
 
-def create_model(modality: str) -> CuaModel:
-    """Download the selected adapter and configure a model for the Mac GPU.
+def create_model(modality: str, device: str, dtype: str) -> CuaModel:
+    """Download the selected adapter and configure the model for inference.
 
     Args:
         modality: "text" for screen text or "multimodal" for screenshots.
+        device: "cpu", "mps", or "cuda".
+        dtype: Dtype name returned by check_environment.
 
     Returns:
-        A Cua model configured for MPS and bfloat16 with a local adapter path.
+        A Cua model configured for the selected device with a local adapter path.
         Base model weights load on the first forward call.
     """
     print(
@@ -135,8 +153,8 @@ def create_model(modality: str) -> CuaModel:
         base_model="Qwen/Qwen3.5-4B",
         lora_adapter_path=Path(adapter_root) / modality,
         modality=modality,
-        device="mps",
-        dtype="bfloat16",
+        device=device,
+        dtype=dtype,
     )
 
 
@@ -186,13 +204,13 @@ def main() -> None:
     probabilities in descending order. Does not execute GUI actions.
     """
     args = parse_args()
-    check_environment()
+    dtype = check_environment(args.device)
     if args.check:
         print("No model weights were downloaded.")
         return
 
     modality = "multimodal" if args.screenshot else "text"
-    model = create_model(modality)
+    model = create_model(modality, args.device, dtype)
     results = score_actions(model, args.screenshot)
     for result in sorted(results, key=lambda item: item.probability, reverse=True):
         print(f"{result.label}: {result.action} {result.probability:.3f}")

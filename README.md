@@ -26,8 +26,17 @@ with screenshot:
 just run --screenshot example/ui.shadcn.com-blocks-login.png
 ```
 
-The sample screenshot shows an empty login form with `Login` and `Login with Google` buttons.
-The current code uses a completed-form goal and fixed `Sign in` / `Cancel` candidates; these need adjustment to match the sample.
+Compare CPU and Apple GPU inference with the same screenshot:
+
+```sh
+just check --device cpu
+just run --device cpu --screenshot example/ui.shadcn.com-blocks-login.png
+just run --device mps --screenshot example/ui.shadcn.com-blocks-login.png
+```
+
+The default device is `mps`. Use `--device cuda` for an NVIDIA GPU with a CUDA-enabled PyTorch installation. CPU inference uses float32; GPU inference uses bfloat16, with float32 for CUDA devices without bfloat16 support. CPU weights alone require roughly 16 GB of memory, plus runtime memory.
+
+The sample scores `Login` and `Login with Google` for the goal of submitting a completed login form.
 
 ---
 

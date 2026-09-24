@@ -11,9 +11,9 @@ setup: sync check
 sync:
     mise exec -- uv sync --locked
 
-# Check dependencies and Apple GPU support without downloading model weights.
-check:
-    mise exec -- uv run main.py --check
+# Check dependencies and the selected device without downloading model weights.
+check *args:
+    mise exec -- uv run main.py --check "$@"
 
 # Check Python lint and formatting.
 lint:
