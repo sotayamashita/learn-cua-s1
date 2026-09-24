@@ -142,12 +142,6 @@ Model inference
 | Input | Login goal, screen state, and Sign in / Cancel candidates | Information for selecting the next action |
 | Output | Probabilities for Sign in and Cancel | Selection probabilities over the supplied candidates |
 
-#### Terminology
-
-- LoRA (Low-Rank Adaptation)
-    - A method for training only additional weights while keeping base weights frozen
-    - Distribution of trained weights as an adapter for use with the same base model
-
 ### Cua-S1 vs. Jev
 
 Is Cua-S1 worth using instead of Jev for GUI action selection?
@@ -163,3 +157,9 @@ Selected results from [Cua's benchmark](https://github.com/trycua/cua/tree/main/
 | Search and filtering | 2.1% | 95.8% |
 
 These are Cua's published results, not local measurements; the table does not specify the Jev version. They do not establish screenshot performance or superiority over current Jev. Local accuracy, speed, and the benefit of image input remain unverified.
+
+#### Terminology
+
+- LoRA (Low-Rank Adaptation)
+    - A method for training only additional weights while keeping base weights frozen
+    - Distribution of trained weights as an adapter for use with the same base model
