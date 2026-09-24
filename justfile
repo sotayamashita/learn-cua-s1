@@ -32,3 +32,7 @@ run *args:
 # Compare the login sample with Harbor; reads TYPESAFE_API_KEY from .env.
 eval *args:
     PYTHONPATH=. mise exec -- uv run --locked --group eval --env-file .env harbor run -c eval.yaml "$@"
+
+# Open the Harbor results viewer.
+eval-report *args:
+    mise exec -- uv run --locked --group eval harbor view jobs "$@"
