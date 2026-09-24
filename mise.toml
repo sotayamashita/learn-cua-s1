@@ -1,0 +1,8 @@
+[env]
+UV_PYTHON = { value = "{{ tools.python.path }}/bin/python", tools = true }
+UV_PYTHON_DOWNLOADS = "never"
+
+[tools]
+just   = "latest"
+python = "3.14.7"
+uv     = "0.6.12"

@@ -1,0 +1,25 @@
+[project]
+name = "computer-use-cua"
+version = "0.1.0"
+description = "Run Cua-S1-4B locally on an Apple Silicon Mac"
+requires-python = ">=3.14.7,<3.15"
+dependencies = [
+    "cua-s1",
+    "transformers>=5.3,<6",
+    "peft>=0.18.1,<1",
+    "accelerate>=1,<2",
+    "huggingface-hub>=1,<2",
+    "pillow>=10,<13",
+    "torchvision>=0.25,<1",
+]
+
+[tool.uv.sources]
+cua-s1 = { url = "https://github.com/trycua/cua/archive/6762bcf63b616c6de86ab7b2309686150913105b.zip", subdirectory = "libs/cua-s1/python" }
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.8",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
