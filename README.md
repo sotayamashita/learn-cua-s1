@@ -178,7 +178,9 @@ These are Cua's published results, not local measurements; the table does not sp
 Cua publishes training code, but the sources reviewed do not report actual training costs. Estimate each adapter separately:
 
 ```text
-SFT cost = runs × GPU hourly price × (examples × epochs × seconds per example / 3,600 + overhead hours)
+SFT cost = runs × GPU hourly price
+         × (examples × epochs × seconds per example / 3,600
+            + overhead hours)
 ```
 
 | Variable | Meaning |
